@@ -1,0 +1,158 @@
+哈哈哈，今天终于能够来学习ThreadLocal了
+
+首先ThreadLocal是什么
+
+ThreadLocal是一个关于创建线程局部变量的类
+
+
+
+通常情况下，我们创建的变量可以被任何一个线程访问并修改的。而使用ThreadLocal创建变量只能被当前线程访问到，其他线程则无法访问和修改。
+
+
+
+Global&&Local 全局和本地
+
+- Global意思是在当前线程中，任何一个点都可以访问到ThreadLocal的值
+- Local 意思是该县城的ThreadLocal只能被该线程访问，一般情况下其他线程是访问不到的
+
+
+
+#### 用法
+
+​	ThreadLocal支持泛型
+
+ThreadLocal<String> mStringThreadLocal = new ThreadLocal<>();
+
+#### set方法
+
+mStringThreadLocal.set("xxxxxxx");
+
+#### get方法
+
+mStringThreadLocal.get();
+
+```java
+public static void main(String[] args) {
+        Thread t = new Thread(){
+          ThreadLocal<String> mStringThreadLcoal = new ThreadLocal<>();
+
+            @Override
+            public void run() {
+                super.run();
+                mStringThreadLcoal.set("58max");
+                System.out.println(mStringThreadLcoal.get());
+            }
+        };
+        t.start();
+    }
+```
+
+#### ThreadLcoal初始值
+
+为ThreadLocal设置默认的get初始值，需要重写initialValue方法，下面是一段代码，我们可以将默认值修改成我们想要设置的
+
+```java
+ThreadLocal<String> myThreadLocal = new ThreadLocal<String>(){
+            @Override
+            protected String initialValue() {
+                return "58max";
+            }
+        };
+```
+
+#### ThreadLocal 的底层原理
+
+ThreadLocal的set方法
+
+- 首先获取当前线程
+- 利用当前线程当做一个句柄获取一个ThreadLocalMap对象
+- 如果ThreadLocalMap对象不为空，则设置值，否则就会创建这个ThreadLocalMap对象并设置值
+
+```java
+set的源码
+    public void set(T value) {
+    	//获取当前线程
+        Thread t = Thread.currentThread();
+    	//获取当前线程中的ThreadLocalMap对象
+        ThreadLocalMap map = getMap(t);
+    	//如果当前线程的ThreadLocalMap不为空就设置该值
+    	//如果为空就创建ThreadLcoalMap对象并设置该值
+        if (map != null)
+            map.set(this, value);
+        else
+            createMap(t, value);
+    }
+//getMap(Thread t)方法的源码
+       ThreadLocalMap getMap(Thread t) {
+        return t.threadLocals;
+    }
+//createMap 的源码
+void createMap(Thread t, T firstValue) {
+        t.threadLocals = new ThreadLocalMap(this, firstValue);
+    }
+//ThreadLocalMap到底是什么？是一个Map集合？还是自定义的一种数据结构
+   // 源码 
+	//	主要还是利用Map的数据结构具有map的大部分特性
+
+   // 主要是利用Map集合的原理 Entry数组用来存放k-v键值对
+ static class Entry extends WeakReference<ThreadLocal<?>> {
+            /** The value associated with this ThreadLocal. */
+            Object value;
+
+            Entry(ThreadLocal<?> k, Object v) {
+                super(k);
+                value = v;
+            }
+        }
+
+  //  INITIAL_CAPACITY 初始化容量大小为16
+    private static final int INITIAL_CAPACITY = 16;
+
+//ThreadLocalMap的构成方法分为下面几种
+//参数是ThreadLocal对象和 Object对象
+ThreadLocalMap(ThreadLocal<?> firstKey, Object firstValue) {
+            table = new Entry[INITIAL_CAPACITY];
+    		//根据hash值和容量大小进行位运算计算出所处桶的位置
+            int i = firstKey.threadLocalHashCode & (INITIAL_CAPACITY - 1);
+    		//把初始化的值放入桶
+            table[i] = new Entry(firstKey, firstValue);
+            size = 1;
+    		//设置阈值为 初始化大小
+            setThreshold(INITIAL_CAPACITY);
+        }
+//私有构造方法 构造函数的参数是一个ThreadLocalMap集合对象
+private ThreadLocalMap(ThreadLocalMap parentMap) {
+            Entry[] parentTable = parentMap.table;
+            int len = parentTable.length;
+    		//	设置阈值为参数ThreadLocalMap的entry数组的长度
+            setThreshold(len);
+            table = new Entry[len];
+			//遍历该Entry数组
+            for (int j = 0; j < len; j++) {
+                Entry e = parentTable[j];
+                //当结点不为空的时候
+                if (e != null) {
+                   //@SuppressWarnings 批注允许您选择性地取消特定代码段（即，类或方法）中的警告。其中的想法是当您看到警告时，您将调查它，如果您确定它不是问题，您就可以添加一个 @SuppressWarnings 批注，以使您不会再看到警告。虽然它听起来似乎会屏蔽潜在的错误，但实际上它将提高代码安全性，因为它将防止您对警告无动于衷 — 您看到的每一个警告都将值得注意。	
+                    @SuppressWarnings("unchecked")
+                    //接收结点的Key值并转化为ThreadLocal<Object>
+                    ThreadLocal<Object> key = (ThreadLocal<Object>) e.get();
+                    //如果key值不为空的话
+                    if (key != null) {
+                        //获取k相对应的value值
+                        Object value = key.childValue(e.value);
+                        //把转换后的结点添加到相应的hash桶中去
+                        Entry c = new Entry(key, value);
+                        int h = key.threadLocalHashCode & (len - 1);						
+                        //如果该位置存在数据并且该位置的小于数组的长度那么就将该index+1
+                        while (table[h] != null)
+                            h = nextIndex(h, len);
+                        table[h] = c;
+                        size++;
+                    }
+                }
+            }
+        }
+```
+
+​	
+
